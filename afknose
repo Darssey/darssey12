@@ -1,0 +1,143 @@
+-- Anti-AFK + Diagnóstico de reinicio (v2, corregido)
+local Players = game:GetService("Players")
+local VirtualUser = game:GetService("VirtualUser")
+local RS = game:GetService("ReplicatedStorage")
+local player = Players.LocalPlayer
+
+if getgenv and getgenv().AntiAFKStop then pcall(getgenv().AntiAFKStop) end
+
+local LOG_FILE = "AntiAFK_log.txt"
+local canFile = type(writefile) == "function"
+local alive = true
+local MOVE_EVERY = 90
+
+local function logToFile(msg)
+    if not canFile then return end
+    pcall(function()
+        local prev = (isfile and isfile(LOG_FILE)) and readfile(LOG_FILE) or ""
+        local lines = {}
+        for line in prev:gmatch("[^\n]+") do table.insert(lines, line) end
+        table.insert(lines, os.date("%Y-%m-%d %H:%M:%S") .. " | " .. msg)
+        while #lines > 150 do table.remove(lines, 1) end
+        writefile(LOG_FILE, table.concat(lines, "\n"))
+    end)
+end
+
+-- Anti-AFK
+local idleConn = player.Idled:Connect(function()
+    VirtualUser:CaptureController()
+    VirtualUser:ClickButton2(Vector2.new())
+    logToFile("Idled disparado, actividad simulada")
+end)
+
+local function nudge()
+    local char = player.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not (hum and hrp) then
+        logToFile("Nudge fallido: sin personaje/HRP")
+        return
+    end
+    local original = hrp.CFrame
+    hum:Move(Vector3.new(0, 0, -1), false)
+    task.wait(0.3)
+    hum:Move(Vector3.new(0, 0, 0), false)
+    task.wait(0.1)
+    if (hrp.Position - original.Position).Magnitude < 0.1 then
+        pcall(function()
+            hrp.CFrame = original * CFrame.new(0, 0, -1)
+            task.wait(0.2)
+            hrp.CFrame = original
+        end)
+    end
+    logToFile("Movimiento simulado")
+end
+
+task.spawn(function()
+    logToFile("Script iniciado (con movimiento cada " .. MOVE_EVERY .. "s)")
+    while alive do
+        task.wait(MOVE_EVERY)
+        if alive then
+            local ok, err = pcall(nudge)
+            if not ok then logToFile("Error en nudge: " .. tostring(err)) end
+        end
+    end
+end)
+
+------------------------------------------------------------------
+-- DIAGNÓSTICO
+------------------------------------------------------------------
+pcall(function()
+    player.CharacterAdded:Connect(function()
+        logToFile("*** PERSONAJE RECREADO (posible reconexión) ***")
+    end)
+end)
+
+task.spawn(function()
+    local ok, err = pcall(function()
+        local char = player.Character or player.CharacterAdded:Wait()
+        local hrp = char:WaitForChild("HumanoidRootPart", 10)
+        local lastPos = hrp and hrp.Position
+        while alive do
+            task.wait(5)
+            char = player.Character
+            hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp and lastPos then
+                local d = (hrp.Position - lastPos).Magnitude
+                if d > 50 then
+                    logToFile("*** TELETRANSPORTE detectado, distancia: " .. math.floor(d) .. " ***")
+                end
+                lastPos = hrp.Position
+            elseif hrp then
+                lastPos = hrp.Position
+            end
+        end
+    end)
+    if not ok then logToFile("Error en vigilancia de teletransporte: " .. tostring(err)) end
+end)
+
+pcall(function()
+    local PlayerGui = player:WaitForChild("PlayerGui")
+    PlayerGui.ChildAdded:Connect(function(child)
+        if child:IsA("ScreenGui") then
+            logToFile("Nuevo ScreenGui: " .. child.Name)
+            task.spawn(function()
+                task.wait(0.3)
+                pcall(function()
+                    for _, d in ipairs(child:GetDescendants()) do
+                        if d:IsA("TextLabel") and d.Text ~= "" and #d.Text < 120 then
+                            logToFile("  Texto en " .. child.Name .. ": " .. d.Text)
+                        end
+                    end
+                end)
+            end)
+        end
+    end)
+end)
+
+pcall(function()
+    for _, d in ipairs(RS:GetDescendants()) do
+        if d:IsA("RemoteEvent") then
+            local n = d.Name:lower()
+            if n:find("afk") or n:find("idle") or n:find("kick") or n:find("inactiv")
+                or n:find("reconnect") or n:find("rejoin") then
+                pcall(function()
+                    d.OnClientEvent:Connect(function(...)
+                        logToFile("*** Remote disparado: " .. d.Name .. " ***")
+                    end)
+                end)
+            end
+        end
+    end
+end)
+
+if getgenv then
+    getgenv().AntiAFKStop = function()
+        alive = false
+        if idleConn then idleConn:Disconnect() end
+        logToFile("Script detenido")
+    end
+end
+
+print("[AntiAFK+Diag] Activo. Registro en " .. LOG_FILE)
+logToFile("=== Nueva sesión v2 (con diagnóstico) ===")
