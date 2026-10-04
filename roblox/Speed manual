@@ -1,0 +1,64 @@
+b
+end
+stepBtn("-10", 8, -10)
+stepBtn("-1", 81, -1)
+stepBtn("+1", 154, 1)
+
+local moreRow = mk("Frame", {
+    Size = UDim2.new(1, -16, 0, 30), Position = UDim2.new(0, 8, 0, 134),
+    BackgroundTransparency = 1,
+}, main)
+local plus10 = mk("TextButton", {
+    Size = UDim2.new(0, 68, 1, 0), Text = "+10",
+    BackgroundColor3 = GRAY, TextColor3 = WHITE,
+    Font = Enum.Font.GothamBold, TextSize = 13, BorderSizePixel = 0,
+}, moreRow)
+mk("UICorner", {CornerRadius = UDim.new(0, 6)}, plus10)
+plus10.Activated:Connect(function() setSpeed(currentSpeed + 10) end)
+
+local resetBtn = mk("TextButton", {
+    Size = UDim2.new(0, 68, 1, 0), Position = UDim2.new(0, 81, 0, 0),
+    Text = "Normal (16)", BackgroundColor3 = GREEN, TextColor3 = WHITE,
+    Font = Enum.Font.GothamBold, TextSize = 11, BorderSizePixel = 0,
+}, moreRow)
+mk("UICorner", {CornerRadius = UDim.new(0, 6)}, resetBtn)
+resetBtn.Activated:Connect(function() setSpeed(DEFAULT_SPEED) end)
+
+local godspeed = mk("TextButton", {
+    Size = UDim2.new(0, 68, 1, 0), Position = UDim2.new(0, 154, 0, 0),
+    Text = "x5", BackgroundColor3 = GRAY, TextColor3 = WHITE,
+    Font = Enum.Font.GothamBold, TextSize = 13, BorderSizePixel = 0,
+}, moreRow)
+mk("UICorner", {CornerRadius = UDim.new(0, 6)}, godspeed)
+godspeed.Activated:Connect(function() setSpeed(DEFAULT_SPEED * 5) end)
+
+local function closeAll()
+    alive = false
+    setSpeed(DEFAULT_SPEED)
+    gui:Destroy()
+end
+closeBtn.Activated:Connect(closeAll)
+if getgenv then getgenv().SpeedStop = closeAll end
+
+-- Arrastrar la ventana
+local dragging, dragStart, startPos
+title.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1
+        or i.UserInputType == Enum.UserInputType.Touch then
+        dragging, dragStart, startPos = true, i.Position, main.Position
+    end
+end)
+UIS.InputChanged:Connect(function(i)
+    if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement
+        or i.UserInputType == Enum.UserInputType.Touch) then
+        local d = i.Position - dragStart
+        main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X,
+                                  startPos.Y.Scale, startPos.Y.Offset + d.Y)
+    end
+end)
+UIS.InputEnded:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1
+        or i.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
